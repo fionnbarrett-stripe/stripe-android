@@ -5,7 +5,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.testing.TestLifecycleOwner
 import com.google.common.truth.Truth.assertThat
 import com.stripe.android.lpmfoundations.paymentmethod.PaymentMethodMetadataFactory
-import com.stripe.android.model.ConfirmationToken
+import com.stripe.android.model.PaymentMethod
 import com.stripe.android.testing.CoroutineTestRule
 import com.stripe.android.utils.FakeActivityResultRegistry
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -192,8 +192,8 @@ internal class LinkControllerCoordinatorTest {
         lifecycleOwner.setCurrentState(Lifecycle.State.STARTED)
         createCoordinator()
 
-        val confirmationToken: ConfirmationToken = mock()
-        val result = LinkController.PresentResult.Completed(confirmationToken)
+        val paymentMethod: PaymentMethod = mock()
+        val result = LinkController.PresentResult.Completed(paymentMethod)
         presentResultFlow.emit(result)
 
         assertThat(presentResults).containsExactly(result)

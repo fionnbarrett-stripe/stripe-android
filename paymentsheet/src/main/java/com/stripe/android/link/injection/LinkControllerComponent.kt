@@ -28,7 +28,6 @@ internal interface LinkControllerComponent {
             @BindsInstance @PaymentElementCallbackIdentifier
             paymentElementCallbackIdentifier: String,
             @BindsInstance requestSurface: RequestSurface,
-            @BindsInstance configuration: LinkController.Configuration,
         ): LinkControllerComponent
     }
 }

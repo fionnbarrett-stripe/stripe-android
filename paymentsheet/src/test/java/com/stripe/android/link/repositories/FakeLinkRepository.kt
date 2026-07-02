@@ -5,8 +5,6 @@ import com.stripe.android.link.LinkPaymentDetails
 import com.stripe.android.link.LinkPaymentMethod
 import com.stripe.android.link.TestFactory
 import com.stripe.android.model.ClientAttributionMetadata
-import com.stripe.android.model.ConfirmationToken
-import com.stripe.android.model.ConfirmationTokenParams
 import com.stripe.android.model.ConsumerPaymentDetails
 import com.stripe.android.model.ConsumerPaymentDetailsUpdateParams
 import com.stripe.android.model.ConsumerSession
@@ -59,8 +57,6 @@ internal open class FakeLinkRepository : LinkRepository {
     var updatePaymentDetailsResult = Result.success(TestFactory.CONSUMER_PAYMENT_DETAILS)
     var updatePhoneNumberResult = Result.success(TestFactory.CONSUMER_SESSION)
     var deletePaymentDetailsResult = Result.success(Unit)
-    var createConfirmationTokenResult: Result<ConfirmationToken> = Result.success(mock())
-
     private val lookupConsumerCalls = Turbine<LookupCall>()
     private val lookupConsumerWithoutBackendLoggingCalls = Turbine<LookupCall>()
     private val mobileLookupCalls = Turbine<MobileLookupCall>()
@@ -262,10 +258,6 @@ internal open class FakeLinkRepository : LinkRepository {
         consumerSessionClientSecret: String,
         phoneNumber: String,
     ): Result<ConsumerSession> = updatePhoneNumberResult
-
-    override suspend fun createConfirmationToken(
-        confirmationTokenParams: ConfirmationTokenParams,
-    ) = createConfirmationTokenResult
 
     suspend fun awaitMobileLookup(): MobileLookupCall {
         return mobileLookupCalls.awaitItem()

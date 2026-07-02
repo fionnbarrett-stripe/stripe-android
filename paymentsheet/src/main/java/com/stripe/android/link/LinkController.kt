@@ -13,7 +13,6 @@ import com.stripe.android.common.configuration.ConfigurationDefaults
 import com.stripe.android.common.ui.DelegateDrawable
 import com.stripe.android.link.injection.DaggerLinkControllerComponent
 import com.stripe.android.link.injection.LinkControllerPresenterComponent
-import com.stripe.android.model.ConfirmationToken
 import com.stripe.android.model.PaymentMethod
 import com.stripe.android.networking.RequestSurface
 import com.stripe.android.paymentsheet.PaymentSheet
@@ -58,7 +57,7 @@ class LinkController @Inject internal constructor(
      * @return The result of the configuration.
      */
     @RestrictTo(RestrictTo.Scope.LIBRARY_GROUP)
-    suspend fun configure(configuration: Configuration): ConfigureResult {
+    suspend fun configure(configuration: Configuration): Result<Unit> {
         return interactor.configure(configuration)
     }
 
@@ -79,7 +78,7 @@ class LinkController @Inject internal constructor(
         email: String,
         phoneNumber: String? = null,
         supportedPaymentMethodTypes: List<PaymentMethodType>? = null,
-    ): ConfigureResult {
+    ): Result<Unit> {
         return interactor.configure(
             displayName = displayName,
             email = email,
@@ -223,9 +222,8 @@ class LinkController @Inject internal constructor(
     }
 
     /**
-     * Configuration for [LinkController].
+     * Configuration for [LinkController]. Only merchantDisplayName, email, phoneNumber and supportedPaymentMEthodTypes are configureable by the user.
      */
-    @RestrictTo(RestrictTo.Scope.LIBRARY_GROUP)
     @Parcelize
     @Poko
     class Configuration internal constructor(
@@ -238,25 +236,19 @@ class LinkController @Inject internal constructor(
         internal val allowUserEmailEdits: Boolean,
         internal val allowLogOut: Boolean,
         internal val linkAppearance: LinkAppearance.State? = null,
-        internal val supportedPaymentMethodTypes: List<PaymentMethodType>? = null,
-        internal val email: String = "",
+        // ↓ NEW — all internal since merchants write-only via Builder; library reads them in configure()
+        internal val email: String? = null,
         internal val phoneNumber: String? = null,
+        internal val supportedPaymentMethodTypes: List<PaymentMethodType>? = null,
     ) : Parcelable {
 
-        /**
-         * [Configuration] builder.
-         *
-         * @param merchantDisplayName Your customer-facing business name.
-         */
-        @RestrictTo(RestrictTo.Scope.LIBRARY_GROUP)
-        class Builder(
-            /**
-             * Your customer-facing business name.
-             */
-            private val merchantDisplayName: String,
-            private val publishableKey: String,
-            private val stripeAccountId: String? = null,
-        ) {
+        class Builder {
+            private val merchantDisplayName: String
+            private var publishableKey: String? = null // null on public path
+            private var stripeAccountId: String? = null
+            private var email: String? = null // new
+            private var phoneNumber: String? = null // new
+            private var supportedPaymentMethodTypes: List<PaymentMethodType>? = null // new
             private var appearance: LinkAppearance? = null
             private var cardBrandAcceptance: PaymentSheet.CardBrandAcceptance =
                 ConfigurationDefaults.cardBrandAcceptance
@@ -267,87 +259,66 @@ class LinkController @Inject internal constructor(
             private var allowUserEmailEdits: Boolean = true
             private var allowLogOut: Boolean = true
 
-            /**
-             * Configure the appearance of Link UI components.
-             *
-             * @param appearance The [LinkAppearance] configuration for customizing Link UI styling.
-             * @return This builder instance for method chaining.
-             */
+            /** Public constructor — PK derived from PaymentConfiguration inside configure(). */
+            constructor(merchantDisplayName: String, email: String) {
+                this.merchantDisplayName = merchantDisplayName
+                this.email = email
+                this.publishableKey = null
+                this.stripeAccountId = null
+            }
+
+            /** Internal constructor — onramp provides explicit PK. Unchanged behaviour. */
+            @RestrictTo(RestrictTo.Scope.LIBRARY_GROUP)
+            constructor(merchantDisplayName: String, publishableKey: String, stripeAccountId: String? = null) {
+                this.merchantDisplayName = merchantDisplayName
+                this.publishableKey = publishableKey
+                this.stripeAccountId = stripeAccountId
+            }
+
+            // ── New public setters
+            fun email(email: String?) = apply { this.email = email }
+
+            fun phoneNumber(phoneNumber: String?) = apply { this.phoneNumber = phoneNumber }
+
+            fun supportedPaymentMethodTypes(types: List<PaymentMethodType>?) = apply {
+                this.supportedPaymentMethodTypes = types
+            }
+
+            // ── Existing setters — no annotation changes needed (were only gated by class @RestrictTo) ──
             fun appearance(appearance: LinkAppearance) = apply {
                 this.appearance = appearance
             }
-
-            /**
-             * Configuration for which card brands should be accepted or blocked.
-             *
-             * By default, Link will accept all card brands supported by Stripe. You can use this
-             * to restrict which card brands are available for Link payment methods.
-             *
-             * @param cardBrandAcceptance Configuration for which card brands should be accepted.
-             * @return This builder instance for method chaining.
-             */
             fun cardBrandAcceptance(cardBrandAcceptance: PaymentSheet.CardBrandAcceptance) = apply {
                 this.cardBrandAcceptance = cardBrandAcceptance
             }
-
-            /**
-             * The billing information for the customer.
-             *
-             * If set, PaymentSheet will pre-populate the form fields with the values provided.
-             * If `billingDetailsCollectionConfiguration.attachDefaultsToPaymentMethod` is `true`,
-             * these values will be attached to the payment method even if they are not collected by
-             * the PaymentSheet UI.
-             */
-            fun defaultBillingDetails(defaultBillingDetails: PaymentSheet.BillingDetails?) =
-                apply { this.defaultBillingDetails = defaultBillingDetails }
-
-            /**
-             * Describes how billing details should be collected.
-             * All values default to `automatic`.
-             * If `never` is used for a required field for the Payment Method used during checkout,
-             * you **must** provide an appropriate value as part of [defaultBillingDetails].
-             */
+            fun defaultBillingDetails(defaultBillingDetails: PaymentSheet.BillingDetails?) = apply {
+                this.defaultBillingDetails = defaultBillingDetails
+            }
             fun billingDetailsCollectionConfiguration(
-                billingDetailsCollectionConfiguration: PaymentSheet.BillingDetailsCollectionConfiguration,
+                billingDetailsCollectionConfiguration: PaymentSheet.BillingDetailsCollectionConfiguration
             ) = apply {
                 this.billingDetailsCollectionConfiguration = billingDetailsCollectionConfiguration
             }
-
-            /**
-             * Whether to allow users to edit their email address within Link.
-             *
-             * @param allowUserEmailEdits True to allow email editing, false to disable it.
-             * @return This builder instance for method chaining.
-             */
             fun allowUserEmailEdits(allowUserEmailEdits: Boolean) = apply {
                 this.allowUserEmailEdits = allowUserEmailEdits
             }
-
-            /**
-             * Whether to allow users to log out from Link.
-             *
-             * @param allowLogOut True to allow logout, false to disable it.
-             * @return This builder instance for method chaining.
-             */
             fun allowLogOut(allowLogOut: Boolean) = apply {
                 this.allowLogOut = allowLogOut
             }
 
-            /**
-             * Build the [Configuration] instance.
-             *
-             * @return A new [Configuration] with the specified settings.
-             */
             fun build(): Configuration = Configuration(
                 merchantDisplayName = merchantDisplayName,
-                publishableKey = publishableKey,
+                publishableKey = publishableKey ?: "", // sentinel for public path; configure() overrides
                 stripeAccountId = stripeAccountId,
+                email = email,
+                phoneNumber = phoneNumber,
+                supportedPaymentMethodTypes = supportedPaymentMethodTypes,
                 cardBrandAcceptance = cardBrandAcceptance,
                 defaultBillingDetails = defaultBillingDetails,
                 billingDetailsCollectionConfiguration = billingDetailsCollectionConfiguration,
                 allowUserEmailEdits = allowUserEmailEdits,
                 allowLogOut = allowLogOut,
-                linkAppearance = appearance?.build()
+                linkAppearance = appearance?.build(),
             )
         }
 
@@ -516,27 +487,6 @@ class LinkController @Inject internal constructor(
     }
 
     /**
-     * Result of configuring the Link controller.
-     */
-    @RestrictTo(RestrictTo.Scope.LIBRARY_GROUP)
-    sealed interface ConfigureResult {
-        /**
-         * Configuration was successful.
-         */
-        @RestrictTo(RestrictTo.Scope.LIBRARY_GROUP)
-        class Success : ConfigureResult
-
-        /**
-         * Configuration failed.
-         *
-         * @param error The error that occurred.
-         */
-        @RestrictTo(RestrictTo.Scope.LIBRARY_GROUP)
-        @Poko
-        class Failed internal constructor(val error: Throwable) : ConfigureResult
-    }
-
-    /**
      * Result of presenting Link payment methods to the user.
      */
     @RestrictTo(RestrictTo.Scope.LIBRARY_GROUP)
@@ -622,11 +572,11 @@ class LinkController @Inject internal constructor(
         /**
          * The user completed the Link flow and a payment method was created.
          *
-         * @param confirmationToken The [ConfirmationToken] created from the selected Link payment method.
+         * @param paymentMethod The [PaymentMethod] created from the selected Link payment method.
          */
         @RestrictTo(RestrictTo.Scope.LIBRARY_GROUP)
         @Poko
-        class Completed internal constructor(val confirmationToken: ConfirmationToken) : PresentResult
+        class Completed internal constructor(val paymentMethod: PaymentMethod) : PresentResult
 
         /**
          * The user canceled the Link flow.
@@ -936,17 +886,10 @@ class LinkController @Inject internal constructor(
          * @return A new [LinkController] configured with the specified settings.
          */
         fun build(): LinkController {
-            val paymentConfig = com.stripe.android.PaymentConfiguration.getInstance(application)
-            val configuration = Configuration.default(
-                context = application,
-                publishableKey = paymentConfig.publishableKey,
-                stripeAccountId = paymentConfig.stripeAccountId,
-            )
             return create(
                 application = application,
                 savedStateHandle = savedStateHandle,
                 requestSurface = RequestSurface.PaymentElement,
-                configuration = configuration,
             )
         }
     }
@@ -967,7 +910,6 @@ class LinkController @Inject internal constructor(
                 // Temporarily "android_crypto_onramp" until backend is ready.
                 // Should be "android_link_controller" instead.
                 requestSurface = RequestSurface.CryptoOnramp,
-                configuration = Configuration.default(application, "", null)
             )
         }
 
@@ -978,7 +920,6 @@ class LinkController @Inject internal constructor(
             application: Application,
             savedStateHandle: SavedStateHandle,
             requestSurface: RequestSurface,
-            configuration: Configuration
         ): LinkController {
             return DaggerLinkControllerComponent.factory()
                 .build(
@@ -986,7 +927,6 @@ class LinkController @Inject internal constructor(
                     savedStateHandle = savedStateHandle,
                     paymentElementCallbackIdentifier = "LinkController",
                     requestSurface = requestSurface,
-                    configuration = configuration,
                 )
                 .linkController
         }

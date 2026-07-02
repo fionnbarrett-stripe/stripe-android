@@ -3,8 +3,6 @@ package com.stripe.android.link.repositories
 import com.stripe.android.link.LinkPaymentDetails
 import com.stripe.android.link.LinkPaymentMethod
 import com.stripe.android.model.ClientAttributionMetadata
-import com.stripe.android.model.ConfirmationToken
-import com.stripe.android.model.ConfirmationTokenParams
 import com.stripe.android.model.ConsumerPaymentDetails
 import com.stripe.android.model.ConsumerPaymentDetailsUpdateParams
 import com.stripe.android.model.ConsumerSession
@@ -231,7 +229,4 @@ internal interface LinkRepository {
         phoneNumber: String,
     ): Result<ConsumerSession>
 
-    suspend fun createConfirmationToken(
-        confirmationTokenParams: ConfirmationTokenParams,
-    ): Result<ConfirmationToken>
 }

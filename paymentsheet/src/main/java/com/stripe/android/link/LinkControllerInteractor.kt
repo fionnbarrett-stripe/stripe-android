@@ -30,7 +30,6 @@ import com.stripe.android.link.ui.wallet.makeFallbackCardName
 import com.stripe.android.link.utils.isLinkAuthorizationError
 import com.stripe.android.lpmfoundations.paymentmethod.PaymentMethodMetadata
 import com.stripe.android.model.CardBrand
-import com.stripe.android.model.ConfirmationToken
 import com.stripe.android.model.ConsumerPaymentDetails
 import com.stripe.android.model.EmailSource
 import com.stripe.android.model.PaymentMethod
@@ -48,8 +47,6 @@ import com.stripe.android.uicore.isSystemDarkTheme
 import com.stripe.android.uicore.utils.combineAsStateFlow
 import com.stripe.android.uicore.utils.mapAsStateFlow
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Deferred
-import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -70,9 +67,10 @@ internal class LinkControllerInteractor @Inject constructor(
     private val linkAccountHolder: LinkAccountHolder,
     private val linkComponentFactoryProvider: Provider<LinkComponent.Factory>,
     @ViewModelScope internal val coroutineScope: CoroutineScope,
-    internal var configuration: LinkController.Configuration,
     private val savedStateHandle: SavedStateHandle,
 ) {
+
+    private var configuration: LinkController.Configuration? = null
 
     private val tag = "LinkControllerViewInteractor"
 
@@ -120,8 +118,8 @@ internal class LinkControllerInteractor @Inject constructor(
     init {
         coroutineScope.launch {
             _presentSelectionSucceededFlow.collect {
-                val presentResult = performCreateConfirmationToken().fold(
-                    onSuccess = { ct -> LinkController.PresentResult.Completed(ct) },
+                val presentResult = performCreatePaymentMethod(apiKey = null).fold(
+                    onSuccess = { pm -> LinkController.PresentResult.Completed(pm) },
                     onFailure = { error -> LinkController.PresentResult.Failed(error) }
                 )
                 emitPresentResult(presentResult)
@@ -156,8 +154,9 @@ internal class LinkControllerInteractor @Inject constructor(
         }
     }
 
-    suspend fun configure(configuration: LinkController.Configuration): LinkController.ConfigureResult {
+    suspend fun configure(configuration: LinkController.Configuration): Result<Unit> {
         logger.debug("$tag: updating configuration")
+        this.configuration = configuration
         updateState { State() }
         PaymentConfiguration.init(
             context = application,
@@ -177,10 +176,11 @@ internal class LinkControllerInteractor @Inject constructor(
             .fold(
                 onSuccess = { (component, paymentMethodMetadata) ->
                     updateState { it.copy(linkComponent = component, paymentMethodMetadata = paymentMethodMetadata) }
-                    LinkController.ConfigureResult.Success()
+                    savedStateHandle[LINK_CONFIGURED_KEY] = true
+                    Result.success(Unit)
                 },
                 onFailure = { error ->
-                    LinkController.ConfigureResult.Failed(error)
+                    Result.failure(error)
                 }
             )
     }
@@ -190,7 +190,7 @@ internal class LinkControllerInteractor @Inject constructor(
         email: String,
         phoneNumber: String? = null,
         supportedPaymentMethodTypes: List<LinkController.PaymentMethodType>? = null,
-    ): LinkController.ConfigureResult {
+    ): Result<Unit> {
         val paymentConfig = PaymentConfiguration.getInstance(application)
         val newConfiguration = LinkController.Configuration(
             merchantDisplayName = displayName,
@@ -207,27 +207,6 @@ internal class LinkControllerInteractor @Inject constructor(
         )
         configuration = newConfiguration
         return configure(newConfiguration)
-    }
-
-    private var configureJob: Deferred<LinkController.ConfigureResult>? = null
-
-    internal suspend fun configureIfNeeded(): LinkController.ConfigureResult {
-        if (_state.value.linkComponent != null) {
-            return LinkController.ConfigureResult.Success()
-        }
-        val existingJob = configureJob
-        if (existingJob != null && existingJob.isActive) {
-            return existingJob.await()
-        }
-        val newJob = coroutineScope.async {
-            configure(configuration).also { result ->
-                if (result is LinkController.ConfigureResult.Success) {
-                    savedStateHandle[LINK_CONFIGURED_KEY] = true
-                }
-            }
-        }
-        configureJob = newJob
-        return newJob.await()
     }
 
     fun presentPaymentMethods(
@@ -261,13 +240,20 @@ internal class LinkControllerInteractor @Inject constructor(
     fun presentFull(
         launcher: ActivityResultLauncher<LinkActivityContract.Args>,
     ) {
+        val config = configuration
+        if (config == null) {
+            _presentResultFlow.tryEmit(
+                LinkController.PresentResult.Failed(MissingConfigurationException())
+            )
+            return
+        }
         if (_state.value.presentationType != null) return
         updateState { it.copy(presentationType = PresentationType.Full) }
         present(
             launcher = launcher,
-            email = configuration.email.takeIf { it.isNotEmpty() },
-            phoneNumber = configuration.phoneNumber,
-            paymentMethodTypes = configuration.supportedPaymentMethodTypes,
+            email = config.email.takeIf { !it.isNullOrEmpty() },
+            phoneNumber = config.phoneNumber,
+            paymentMethodTypes = config.supportedPaymentMethodTypes,
             onConfigurationError = { error ->
                 updateState { it.copy(presentationType = null) }
                 _presentResultFlow.tryEmit(LinkController.PresentResult.Failed(error))
@@ -275,7 +261,7 @@ internal class LinkControllerInteractor @Inject constructor(
             getLaunchMode = { _, state ->
                 LinkLaunchMode.PaymentMethodSelection(
                     selectedPayment = state.selectedPaymentMethod?.details,
-                    paymentMethodFilters = configuration.supportedPaymentMethodTypes?.toFilters(),
+                    paymentMethodFilters = config.supportedPaymentMethodTypes?.toFilters(),
                     sharePaymentDetailsImmediatelyAfterCreation = false,
                     shouldShowSecondaryCta = false,
                 )
@@ -741,15 +727,6 @@ internal class LinkControllerInteractor @Inject constructor(
                 linkPaymentMethod = paymentMethod
             )
         }
-    }
-
-    private suspend fun performCreateConfirmationToken(): Result<ConfirmationToken> {
-        val state = _state.value
-        val component = requireLinkComponent(state)
-            .getOrElse { return Result.failure(it) }
-        val paymentMethod = state.selectedPaymentMethod
-            ?: return Result.failure(IllegalStateException("No selected payment method"))
-        return component.linkAccountManager.createConfirmationToken(paymentMethod)
     }
 
     private fun LinkAttestationCheck.Result.toResult(): Result<Unit> =
