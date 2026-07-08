@@ -9,7 +9,7 @@ import com.stripe.android.paymentsheet.state.PaymentElementLoader
 import javax.inject.Inject
 
 internal interface LinkConfigurationLoader {
-    suspend fun load(configuration: LinkController.Configuration): Result<LinkMetadata>
+    suspend fun load(configuration: LinkController.Configuration.State): Result<LinkMetadata>
 }
 
 internal class DefaultLinkConfigurationLoader @Inject constructor(
@@ -20,7 +20,7 @@ internal class DefaultLinkConfigurationLoader @Inject constructor(
 ) : LinkConfigurationLoader {
     private val tag = "LinkConfigurationLoader"
 
-    override suspend fun load(configuration: LinkController.Configuration): Result<LinkMetadata> {
+    override suspend fun load(configuration: LinkController.Configuration.State): Result<LinkMetadata> {
         return paymentElementLoader.load(
             initializationMode = PaymentElementLoader.InitializationMode.CryptoOnramp,
             integrationConfiguration = PaymentElementLoader.Configuration.CryptoOnramp(configuration),

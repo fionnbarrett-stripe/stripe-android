@@ -15,7 +15,7 @@ internal class FakeLinkConfigurationLoader : LinkConfigurationLoader {
             )
         )
 
-    override suspend fun load(configuration: LinkController.Configuration): Result<LinkMetadata> {
+    override suspend fun load(configuration: LinkController.Configuration.State): Result<LinkMetadata> {
         loadCallCount++
         if (!shouldUpdateResult) {
             return linkConfigurationResult

@@ -62,32 +62,6 @@ class LinkController @Inject internal constructor(
     }
 
     /**
-     * Configure the controller with the customer's email, phone number, and supported payment method types.
-     *
-     * A default [Configuration] is built automatically from the [PaymentConfiguration] publishable key.
-     * The [state] will reset and the Link session will be reloaded. The result is returned.
-     *
-     * @param email The customer's email address.
-     * @param phoneNumber Optional phone number to pre-fill during sign-up, in E.164 format.
-     * @param supportedPaymentMethodTypes Optional list of payment method types to restrict selection to.
-     *   If null, all supported types are shown.
-     * @return The result of the configuration.
-     */
-    suspend fun configure(
-        displayName: String,
-        email: String,
-        phoneNumber: String? = null,
-        supportedPaymentMethodTypes: List<PaymentMethodType>? = null,
-    ): Result<Unit> {
-        return interactor.configure(
-            displayName = displayName,
-            email = email,
-            phoneNumber = phoneNumber,
-            supportedPaymentMethodTypes = supportedPaymentMethodTypes,
-        )
-    }
-
-    /**
      * Create a payment method from the currently selected Link payment method.
      *
      * This converts the selected Link payment method into a Stripe [PaymentMethod] that can be
@@ -222,114 +196,111 @@ class LinkController @Inject internal constructor(
     }
 
     /**
-     * Configuration for [LinkController]. Only merchantDisplayName, email, phoneNumber and supportedPaymentMEthodTypes are configureable by the user.
+     * Configuration for [LinkController].
      */
-    @Parcelize
-    @Poko
-    class Configuration internal constructor(
-        internal val merchantDisplayName: String,
-        internal val publishableKey: String,
-        internal val stripeAccountId: String?,
-        internal val cardBrandAcceptance: PaymentSheet.CardBrandAcceptance,
-        internal val defaultBillingDetails: PaymentSheet.BillingDetails?,
-        internal val billingDetailsCollectionConfiguration: PaymentSheet.BillingDetailsCollectionConfiguration,
-        internal val allowUserEmailEdits: Boolean,
-        internal val allowLogOut: Boolean,
-        internal val linkAppearance: LinkAppearance.State? = null,
-        // ↓ NEW — all internal since merchants write-only via Builder; library reads them in configure()
-        internal val email: String? = null,
-        internal val phoneNumber: String? = null,
-        internal val supportedPaymentMethodTypes: List<PaymentMethodType>? = null,
-    ) : Parcelable {
+    @RestrictTo(RestrictTo.Scope.LIBRARY_GROUP)
+    class Configuration {
+        private var merchantDisplayName: String
+        private var publishableKey: String?
+        private var stripeAccountId: String?
+        private var email: String?
+        private var phoneNumber: String? = null
+        private var supportedPaymentMethodTypes: List<PaymentMethodType>? = null
+        private var appearance: LinkAppearance? = null
+        private var cardBrandAcceptance: PaymentSheet.CardBrandAcceptance =
+            ConfigurationDefaults.cardBrandAcceptance
+        private var defaultBillingDetails: PaymentSheet.BillingDetails? =
+            ConfigurationDefaults.billingDetails
+        private var billingDetailsCollectionConfiguration: PaymentSheet.BillingDetailsCollectionConfiguration =
+            ConfigurationDefaults.billingDetailsCollectionConfiguration
+        private var allowUserEmailEdits: Boolean = true
+        private var allowLogout: Boolean = true
 
-        class Builder {
-            private val merchantDisplayName: String
-            private var publishableKey: String? = null // null on public path
-            private var stripeAccountId: String? = null
-            private var email: String? = null // new
-            private var phoneNumber: String? = null // new
-            private var supportedPaymentMethodTypes: List<PaymentMethodType>? = null // new
-            private var appearance: LinkAppearance? = null
-            private var cardBrandAcceptance: PaymentSheet.CardBrandAcceptance =
-                ConfigurationDefaults.cardBrandAcceptance
-            private var defaultBillingDetails: PaymentSheet.BillingDetails? =
-                ConfigurationDefaults.billingDetails
-            private var billingDetailsCollectionConfiguration: PaymentSheet.BillingDetailsCollectionConfiguration =
-                ConfigurationDefaults.billingDetailsCollectionConfiguration
-            private var allowUserEmailEdits: Boolean = true
-            private var allowLogOut: Boolean = true
-
-            /** Public constructor — PK derived from PaymentConfiguration inside configure(). */
-            constructor(merchantDisplayName: String, email: String) {
-                this.merchantDisplayName = merchantDisplayName
-                this.email = email
-                this.publishableKey = null
-                this.stripeAccountId = null
-            }
-
-            /** Internal constructor — onramp provides explicit PK. Unchanged behaviour. */
-            @RestrictTo(RestrictTo.Scope.LIBRARY_GROUP)
-            constructor(merchantDisplayName: String, publishableKey: String, stripeAccountId: String? = null) {
-                this.merchantDisplayName = merchantDisplayName
-                this.publishableKey = publishableKey
-                this.stripeAccountId = stripeAccountId
-            }
-
-            // ── New public setters
-            fun email(email: String?) = apply { this.email = email }
-
-            fun phoneNumber(phoneNumber: String?) = apply { this.phoneNumber = phoneNumber }
-
-            fun supportedPaymentMethodTypes(types: List<PaymentMethodType>?) = apply {
-                this.supportedPaymentMethodTypes = types
-            }
-
-            // ── Existing setters — no annotation changes needed (were only gated by class @RestrictTo) ──
-            fun appearance(appearance: LinkAppearance) = apply {
-                this.appearance = appearance
-            }
-            fun cardBrandAcceptance(cardBrandAcceptance: PaymentSheet.CardBrandAcceptance) = apply {
-                this.cardBrandAcceptance = cardBrandAcceptance
-            }
-            fun defaultBillingDetails(defaultBillingDetails: PaymentSheet.BillingDetails?) = apply {
-                this.defaultBillingDetails = defaultBillingDetails
-            }
-            fun billingDetailsCollectionConfiguration(
-                billingDetailsCollectionConfiguration: PaymentSheet.BillingDetailsCollectionConfiguration
-            ) = apply {
-                this.billingDetailsCollectionConfiguration = billingDetailsCollectionConfiguration
-            }
-            fun allowUserEmailEdits(allowUserEmailEdits: Boolean) = apply {
-                this.allowUserEmailEdits = allowUserEmailEdits
-            }
-            fun allowLogOut(allowLogOut: Boolean) = apply {
-                this.allowLogOut = allowLogOut
-            }
-
-            fun build(): Configuration = Configuration(
-                merchantDisplayName = merchantDisplayName,
-                publishableKey = publishableKey ?: "", // sentinel for public path; configure() overrides
-                stripeAccountId = stripeAccountId,
-                email = email,
-                phoneNumber = phoneNumber,
-                supportedPaymentMethodTypes = supportedPaymentMethodTypes,
-                cardBrandAcceptance = cardBrandAcceptance,
-                defaultBillingDetails = defaultBillingDetails,
-                billingDetailsCollectionConfiguration = billingDetailsCollectionConfiguration,
-                allowUserEmailEdits = allowUserEmailEdits,
-                allowLogOut = allowLogOut,
-                linkAppearance = appearance?.build(),
-            )
+        constructor(merchantDisplayName: String, email: String) {
+            this.merchantDisplayName = merchantDisplayName
+            this.email = email
+            this.publishableKey = null
+            this.stripeAccountId = null
         }
+
+        @RestrictTo(RestrictTo.Scope.LIBRARY_GROUP)
+        constructor(merchantDisplayName: String, publishableKey: String, stripeAccountId: String? = null) {
+            this.merchantDisplayName = merchantDisplayName
+            this.publishableKey = publishableKey
+            this.stripeAccountId = stripeAccountId
+            this.email = null
+        }
+
+        fun email(email: String?) = apply { this.email = email }
+
+        fun phoneNumber(phoneNumber: String?) = apply { this.phoneNumber = phoneNumber }
+
+        fun supportedPaymentMethodTypes(types: List<PaymentMethodType>?) = apply {
+            this.supportedPaymentMethodTypes = types
+        }
+
+        fun appearance(appearance: LinkAppearance) = apply { this.appearance = appearance }
+
+        fun cardBrandAcceptance(cardBrandAcceptance: PaymentSheet.CardBrandAcceptance) = apply {
+            this.cardBrandAcceptance = cardBrandAcceptance
+        }
+
+        fun defaultBillingDetails(defaultBillingDetails: PaymentSheet.BillingDetails?) = apply {
+            this.defaultBillingDetails = defaultBillingDetails
+        }
+
+        fun billingDetailsCollectionConfiguration(
+            billingDetailsCollectionConfiguration: PaymentSheet.BillingDetailsCollectionConfiguration
+        ) = apply {
+            this.billingDetailsCollectionConfiguration = billingDetailsCollectionConfiguration
+        }
+
+        fun allowUserEmailEdits(allowUserEmailEdits: Boolean) = apply {
+            this.allowUserEmailEdits = allowUserEmailEdits
+        }
+
+        fun allowLogout(allowLogout: Boolean) = apply { this.allowLogout = allowLogout }
+
+        @Parcelize
+        @Poko
+        internal class State(
+            internal val merchantDisplayName: String,
+            internal val publishableKey: String,
+            internal val stripeAccountId: String?,
+            internal val cardBrandAcceptance: PaymentSheet.CardBrandAcceptance,
+            internal val defaultBillingDetails: PaymentSheet.BillingDetails?,
+            internal val billingDetailsCollectionConfiguration: PaymentSheet.BillingDetailsCollectionConfiguration,
+            internal val allowUserEmailEdits: Boolean,
+            internal val allowLogout: Boolean,
+            internal val linkAppearance: LinkAppearance.State?,
+            internal val email: String?,
+            internal val phoneNumber: String?,
+            internal val supportedPaymentMethodTypes: List<PaymentMethodType>?,
+        ) : Parcelable
+
+        internal fun build(): State = State(
+            merchantDisplayName = merchantDisplayName,
+            publishableKey = publishableKey ?: "",
+            stripeAccountId = stripeAccountId,
+            email = email,
+            phoneNumber = phoneNumber,
+            supportedPaymentMethodTypes = supportedPaymentMethodTypes,
+            cardBrandAcceptance = cardBrandAcceptance,
+            defaultBillingDetails = defaultBillingDetails,
+            billingDetailsCollectionConfiguration = billingDetailsCollectionConfiguration,
+            allowUserEmailEdits = allowUserEmailEdits,
+            allowLogout = allowLogout,
+            linkAppearance = appearance?.build(),
+        )
 
         internal companion object {
             fun default(context: Context, publishableKey: String, stripeAccountId: String? = null): Configuration {
                 val appName = context.applicationInfo.loadLabel(context.packageManager).toString()
-                return Builder(
+                return Configuration(
                     merchantDisplayName = appName,
                     publishableKey = publishableKey,
                     stripeAccountId = stripeAccountId,
-                ).build()
+                )
             }
         }
     }

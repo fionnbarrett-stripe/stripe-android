@@ -6,8 +6,6 @@ import android.os.Parcelable
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.SavedStateHandle
 import com.stripe.android.R
-import com.stripe.android.core.StripeError
-import com.stripe.android.core.exception.StripeException
 import com.stripe.android.core.utils.flatMapCatching
 import com.stripe.android.crypto.onramp.CheckoutState.Status
 import com.stripe.android.crypto.onramp.analytics.OnrampAnalyticsEvent
@@ -126,14 +124,13 @@ internal class OnrampInteractor @Inject constructor(
         // We are *not* calling `PaymentConfiguration.init()` here because we're relying on
         // `LinkController.configure()` to do it.
         val linkResult = linkController.configure(
-            LinkController.Configuration.Builder(
+            LinkController.Configuration(
                 merchantDisplayName = configurationState.merchantDisplayName,
                 publishableKey = configurationState.publishableKey,
             )
-                .allowLogOut(false)
+                .allowLogout(false)
                 .allowUserEmailEdits(false)
                 .appearance(configurationState.appearance)
-                .build()
         )
 
         return if (linkResult.isSuccess) {

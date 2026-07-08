@@ -75,10 +75,10 @@ internal class LinkControllerPlaygroundViewModel(
     ) {
         viewModelScope.launch {
             val result = linkController.configure(
-                displayName = "PaymentSheet Example",
-                email = email,
-                phoneNumber = phoneNumber,
-                supportedPaymentMethodTypes = paymentMethodTypes,
+                LinkController.Configuration(
+                    merchantDisplayName = "PaymentSheet Example",
+                    email = email
+                ).phoneNumber(phoneNumber).supportedPaymentMethodTypes(paymentMethodTypes)
             )
 
             if (result.isSuccess) {

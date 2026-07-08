@@ -8,7 +8,6 @@ import androidx.annotation.RestrictTo
 import androidx.annotation.VisibleForTesting
 import androidx.lifecycle.SavedStateHandle
 import com.stripe.android.PaymentConfiguration
-import com.stripe.android.common.configuration.ConfigurationDefaults
 import com.stripe.android.core.Logger
 import com.stripe.android.core.injection.ViewModelScope
 import com.stripe.android.core.strings.ResolvableString
@@ -70,7 +69,7 @@ internal class LinkControllerInteractor @Inject constructor(
     private val savedStateHandle: SavedStateHandle,
 ) {
 
-    private var configuration: LinkController.Configuration? = null
+    private var configuration: LinkController.Configuration.State? = null
 
     private val tag = "LinkControllerViewInteractor"
 
@@ -156,14 +155,17 @@ internal class LinkControllerInteractor @Inject constructor(
 
     suspend fun configure(configuration: LinkController.Configuration): Result<Unit> {
         logger.debug("$tag: updating configuration")
-        this.configuration = configuration
+        val paymentConfig = PaymentConfiguration.getInstance(application)
+
+        val config = configuration.build()
+        this.configuration = config
         updateState { State() }
         PaymentConfiguration.init(
             context = application,
-            publishableKey = configuration.publishableKey,
-            stripeAccountId = configuration.stripeAccountId,
+            publishableKey = config.publishableKey.takeIf { it.isNotBlank() } ?: paymentConfig.publishableKey,
+            stripeAccountId = config.stripeAccountId ?: paymentConfig.stripeAccountId,
         )
-        return linkConfigurationLoader.load(configuration)
+        return linkConfigurationLoader.load(config)
             .flatMapCatching { linkMetadata ->
                 val component = linkComponentFactoryProvider.get()
                     .create(
@@ -183,30 +185,6 @@ internal class LinkControllerInteractor @Inject constructor(
                     Result.failure(error)
                 }
             )
-    }
-
-    suspend fun configure(
-        displayName: String,
-        email: String,
-        phoneNumber: String? = null,
-        supportedPaymentMethodTypes: List<LinkController.PaymentMethodType>? = null,
-    ): Result<Unit> {
-        val paymentConfig = PaymentConfiguration.getInstance(application)
-        val newConfiguration = LinkController.Configuration(
-            merchantDisplayName = displayName,
-            publishableKey = paymentConfig.publishableKey,
-            stripeAccountId = paymentConfig.stripeAccountId,
-            cardBrandAcceptance = ConfigurationDefaults.cardBrandAcceptance,
-            defaultBillingDetails = null,
-            billingDetailsCollectionConfiguration = ConfigurationDefaults.billingDetailsCollectionConfiguration,
-            allowUserEmailEdits = true,
-            allowLogOut = true,
-            email = email,
-            phoneNumber = phoneNumber,
-            supportedPaymentMethodTypes = supportedPaymentMethodTypes,
-        )
-        configuration = newConfiguration
-        return configure(newConfiguration)
     }
 
     fun presentPaymentMethods(

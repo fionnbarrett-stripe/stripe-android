@@ -134,16 +134,16 @@ class LinkControllerInteractorTest {
         )
 
         val controllerConfig =
-            LinkController.Configuration.Builder(
+            LinkController.Configuration(
                 merchantDisplayName = "Example",
                 publishableKey = "pk_123",
                 stripeAccountId = "acct_123"
-            ).build()
+            )
         assertThat(interactor.configure(controllerConfig).isSuccess).isTrue()
         assertThat(linkComponent.configuration).isEqualTo(loadedConfiguration)
         val paymentConfiguration = PaymentConfiguration.getInstance(application)
-        assertThat(paymentConfiguration.publishableKey).isEqualTo(controllerConfig.publishableKey)
-        assertThat(paymentConfiguration.stripeAccountId).isEqualTo(controllerConfig.stripeAccountId)
+        assertThat(paymentConfiguration.publishableKey).isEqualTo("pk_123")
+        assertThat(paymentConfiguration.stripeAccountId).isEqualTo("acct_123")
     }
 
     @Test
@@ -1054,10 +1054,9 @@ class LinkControllerInteractorTest {
             )
         )
         interactor.configure(
-            LinkController.Configuration.Builder("Test", ApiKeyFixtures.DEFAULT_PUBLISHABLE_KEY)
+            LinkController.Configuration("Test", ApiKeyFixtures.DEFAULT_PUBLISHABLE_KEY, null)
                 .apply { defaultBillingDetails?.let { defaultBillingDetails(it.getOrNull()) } }
                 .apply { billingDetailsCollectionConfiguration?.let { billingDetailsCollectionConfiguration(it) } }
-                .build()
         )
     }
 
@@ -1265,9 +1264,10 @@ class LinkControllerInteractorTest {
         )
         PaymentConfiguration.init(application, ApiKeyFixtures.DEFAULT_PUBLISHABLE_KEY)
         interactor.configure(
-            displayName = "Test",
-            email = "test@example.com",
-            phoneNumber = "+15551234567",
+            LinkController.Configuration(
+                merchantDisplayName = "Test",
+                email = "test@example.com"
+            ).phoneNumber("+15551234567")
         )
 
         val launcher = FakeActivityResultLauncher<LinkActivityContract.Args>()
@@ -1295,9 +1295,10 @@ class LinkControllerInteractorTest {
         )
         PaymentConfiguration.init(application, ApiKeyFixtures.DEFAULT_PUBLISHABLE_KEY)
         interactor.configure(
-            displayName = "Test",
-            email = "test@example.com",
-            supportedPaymentMethodTypes = listOf(LinkController.PaymentMethodType.Card),
+            LinkController.Configuration(
+                merchantDisplayName = "Test",
+                email = "test@example.com",
+            ).supportedPaymentMethodTypes(listOf(LinkController.PaymentMethodType.Card)),
         )
 
         val launcher = FakeActivityResultLauncher<LinkActivityContract.Args>()

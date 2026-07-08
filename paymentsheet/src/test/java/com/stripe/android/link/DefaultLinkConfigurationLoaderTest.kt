@@ -22,7 +22,7 @@ internal class DefaultLinkConfigurationLoaderTest {
     private val linkGate = FakeLinkGate()
     private val linkGateFactory = FakeLinkGate.Factory(linkGate)
     private val configuration =
-        LinkController.Configuration.Builder(
+        LinkController.Configuration(
             merchantDisplayName = "Test Merchant",
             publishableKey = ApiKeyFixtures.DEFAULT_PUBLISHABLE_KEY,
         ).build()
@@ -108,7 +108,7 @@ internal class DefaultLinkConfigurationLoaderTest {
             PaymentSheet.BillingDetailsCollectionConfiguration(
                 phone = PaymentSheet.BillingDetailsCollectionConfiguration.CollectionMode.Never,
             )
-        val controllerConfig = LinkController.Configuration.Builder(
+        val controllerConfig = LinkController.Configuration(
             merchantDisplayName = TestFactory.MERCHANT_NAME,
             publishableKey = ApiKeyFixtures.DEFAULT_PUBLISHABLE_KEY
         )
