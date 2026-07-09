@@ -8,6 +8,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.stripe.android.common.nfcscan.tapzone.TapZone
+import com.stripe.android.core.strings.ResolvableString
+import com.stripe.android.core.strings.resolvableString
+import com.stripe.android.paymentsheet.R
 import com.stripe.android.screenshottesting.Orientation
 import com.stripe.android.screenshottesting.PaparazziRule
 import com.stripe.android.screenshottesting.SystemAppearance
@@ -24,6 +27,7 @@ internal class NfcScanningLayoutScreenshotTestSuite {
     class Static(
         private val deviceRotation: DeviceRotation,
         private val tapZone: TapZone,
+        private val error: ResolvableString? = null,
         paparazziOrientation: Orientation,
     ) {
         @get:Rule
@@ -39,7 +43,7 @@ internal class NfcScanningLayoutScreenshotTestSuite {
             paparazziRule.snapshot {
                 NfcScanningTheme {
                     NfcScanningLayout(
-                        status = NfcScanningStatus.Idle,
+                        status = NfcScanningStatus.Idle(error),
                         tapZone = tapZone,
                         deviceRotation = deviceRotation,
                         onClose = {},
@@ -100,7 +104,7 @@ internal class NfcScanningLayoutScreenshotTestSuite {
             paparazziRule.gif(end = 1500L) {
                 NfcScanningTheme {
                     NfcScanningLayout(
-                        status = NfcScanningStatus.Idle,
+                        status = NfcScanningStatus.Idle(error = null),
                         tapZone = TapZone(xBias = 0.5f, yBias = 0.35f),
                         deviceRotation = DeviceRotation.Portrait,
                         onClose = {},
@@ -114,7 +118,9 @@ internal class NfcScanningLayoutScreenshotTestSuite {
         fun scanned() {
             paparazziRule.gif(end = 2400L) {
                 NfcScanningTheme {
-                    var status by remember { mutableStateOf<NfcScanningStatus>(NfcScanningStatus.Idle) }
+                    var status by remember {
+                        mutableStateOf<NfcScanningStatus>(NfcScanningStatus.Idle(error = null))
+                    }
 
                     LaunchedEffect(Unit) {
                         delay(800L)
